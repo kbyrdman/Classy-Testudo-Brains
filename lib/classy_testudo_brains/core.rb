@@ -5,14 +5,21 @@ require 'open-uri'
 
 module UMD
 	module Waitlist
-		class Page
+		class Core
 
 			attr_accessor :base
-			def initialize(link)
-				uri = URI.parse(link)
-				response = Net::HTTP.get_response(uri)
-				@base = Nokogiri::HTML(response.body)
+			def initialize(base)
+				@base = base
 			end
+
+			def session
+		        if base.is_a? Capybara::Session
+		          return base
+		        else
+		          return base.session
+		        end
+		    end
+
 		end
 	end
 end
