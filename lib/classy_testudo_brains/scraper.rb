@@ -1,18 +1,14 @@
-require 'core'
+require 'classy_testudo_brains/core'
 
 module UMD
 	module Waitlist
 
 		class Scraper
 
-			def schedule_of_classes
-				session.find(:xpath, "//a[text()='Schedule of Classes']")[:href]
-			end
-
-
 			def self.scrape(link="http://registrar.umd.edu/")
 				session = Capybara::Session.new :poltergeist
 				session.visit link
+				schedule_of_classes = session.find(:xpath, "//a[text()='Schedule of Classes']")[:href]
 				session.visit schedule_of_classes
 				page = ScheduleOfClasses.new session
 				return page.scrape
@@ -42,9 +38,12 @@ module UMD
 
 			def scrape
 				ret = []
+				puts departments
 				departments.each do |url|
+					puts url
 					session.visit url
-					ret << Department.new(session).scrape
+					page = Department.new(session)
+					ret << page.scrape
 				end
 				ret	
 			end
@@ -62,7 +61,7 @@ module UMD
 			end
 
 			def scrape
-				{ name => courses.map{|course| Class.new(course).scrape} }
+				{ name => courses.map{|course| puts "scraping #{course[:id]}"; c = Class.new(course); c.scrape} }
 			end
 		end	
 
@@ -70,28 +69,30 @@ module UMD
 		class Class < Core
 
 			def initialize(base)
-				base.find(:xpath, ".//a[@class='toggle-sections-link']").click
+				if base.first(:css, "a[class='toggle-sections-link']")
+					base.first(:css, "a[class='toggle-sections-link']").click
+				end
 				super(base)
 			end
 			
 			def sections
-				base.all(:css, "div[class='section']")
+				base.all(:css, "div[class='section']") 
 			end
 
 			def course_id
-				base.find(:css, "div[class='course-id']").text
+				base.find(:css, "div[class='course-id']").text rescue "N/A"
 			end
 
 			def course_title
-				base.find(:css, "span[class='course-title']").text
+				base.find(:css, "span[class='course-title']").text rescue "N/A"
 			end
 
 			def course_credits
-				base.find(:css, "span[class='course-min-credits']").text
+				base.find(:css, "span[class='course-min-credits']").text rescue "N/A"
 			end
 
 			def description
-				base.find(:css, "div[class='approved-course-text']").text
+				base.find(:css, "div[class='approved-course-text']").text rescue "N/A"
 			end
 			
 			def scrape
@@ -100,45 +101,52 @@ module UMD
 					title: course_title,
 					credits: course_credits,
 					description: description,
-					sections: sections.map{|s| Section.new(s).scrape}
+					sections: sections.map{|s| sec = Section.new(s); sec.scrape}
 				}
 			end
 
 			class Section < Core
 
 				def section_number
-					base.find(:css, "span[class='section-id']").text
+					base.find(:css, "span[class='section-id']").text rescue "N/A"
 				end
 
 				def seats
-					total = base.find(:css, "span[class='total-seats-count']").text
-					open = base.find(:css, "span[class='open-seats-count']").text
-					waitlist = base.find(:css, "span[class='waitlist-count']").text
+					total = open = waitlist = "N/A"
+					if base.first(:css, "span[class='total-seats-count']")
+						total = base.first(:css, "span[class='total-seats-count']").text
+					end
+					if base.first(:css, "span[class='open-seats-count']")
+						open = base.first(:css, "span[class='open-seats-count']").text
+					end
+					if base.first(:css, "span[class='waitlist-count']")
+						waitlist = base.first(:css, "span[class='waitlist-count']").text
+					end
 					return { total: total, open: open, waitlist: waitlist }
 				end
 
 				def class_days
-					base.find(:css, "span[class='section-days']").text
+					base.find(:css, "span[class='section-days']").text rescue "N/A" 
 				end
 
 				def start_time
-					base.find(:css, "span[class='class-start-time']").text
+					base.find(:css, "span[class='class-start-time']").text rescue "N/A"
 				end
 
 				def end_time
-					base.find(:css, "span[class='class-end-time']").text
+					base.find(:css, "span[class='class-end-time']").text rescue "N/A"
 				end
 
 				def instructor
-					base.find(:css, "span[class='section-instructor']").text
+					base.find(:css, "span[class='section-instructor']").text rescue "N/A"
 				end
 
 				def room_number
-					base.find(:css, "span[class='class-room']").text
+					base.find(:css, "span[class='class-room']").text rescue "N/A"
 				end
 
 				def building
-					base.find(:css, "span[class='building-code']").text
+					base.find(:css, "span[class='building-code']").text rescue "N/A"
 				end
 
 				def scrape
