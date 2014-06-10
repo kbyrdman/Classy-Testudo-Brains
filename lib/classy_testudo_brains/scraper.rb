@@ -53,20 +53,28 @@ module UMD
 		class Department < Core
 
 			def courses
-				session.find(:xpath, "//div[@class='courses-container']").all(:css, "div")
+				session.find(:xpath, "//div[@class='courses-container']").all(:xpath, "./div")
 			end
 
-			def name
+			def abrv
 				session.find(:xpath, "//div[@class='course-prefix-info']").find(:xpath, ".//span[@class='course-prefix-abbr']").text
 			end
 
+			def name
+				session.find(:xpath, "//span[@class='course-prefix-name']").text
+			end
+
 			def scrape
-				{ name => courses.map{|course| puts "scraping #{course[:id]}"; c = Class.new(course); c.scrape} }
+				{ 
+					department_abrv: abrv,
+					department_name: name,
+					courses: courses.map{|course| puts "scraping #{course[:id]}"; c = Course.new(course); c.scrape} 
+				}
 			end
 		end	
 
 
-		class Class < Core
+		class Course < Core
 
 			def initialize(base)
 				if base.first(:css, "a[class='toggle-sections-link']")
