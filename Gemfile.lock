@@ -8,6 +8,7 @@ GEM
       rack-test (>= 0.5.4)
       xpath (~> 2.0)
     cliver (0.3.2)
+    holdon (1.0.2)
     mime-types (2.3)
     mini_portile (0.6.0)
     multi_json (1.10.1)
@@ -37,6 +38,7 @@ PLATFORMS
 
 DEPENDENCIES
   capybara
+  holdon
   nokogiri
   poltergeist (~> 1.5.1)
   sinatra
