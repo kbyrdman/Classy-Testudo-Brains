@@ -12,6 +12,7 @@ Sinatra app for scraping UMD waitlists
 
 
  - scraping one department
+	
 	1) create a session and navigate to the department page
 
 	> session = Capybara::Session.new :poltergeist
