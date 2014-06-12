@@ -1,4 +1,5 @@
 require 'classy_testudo_brains/core'
+require 'holdon'
 
 module UMD
 	module Waitlist
@@ -79,6 +80,17 @@ module UMD
 			def initialize(base)
 				if base.first(:css, "a[class='toggle-sections-link']")
 					base.first(:css, "a[class='toggle-sections-link']").click
+					HoldOn.until(timeout: 10) do 
+						if base.first(:css, "div[class='sections-container']")
+							if !base.first(:css, "div[class='sections-container']")[:style].include?("display: none;") 
+								true
+							else
+								false
+							end
+						else 
+							false
+						end
+					end
 				end
 				super(base)
 			end
@@ -88,19 +100,24 @@ module UMD
 			end
 
 			def course_id
-				base.find(:css, "div[class='course-id']").text rescue "N/A"
+				base.first(:css, "div[class='course-id']").text rescue "N/A"
 			end
 
 			def course_title
-				base.find(:css, "span[class='course-title']").text rescue "N/A"
+				base.first(:css, "span[class='course-title']").text rescue "N/A"
 			end
 
 			def course_credits
-				base.find(:css, "span[class='course-min-credits']").text rescue "N/A"
+				base.first(:css, "span[class='course-min-credits']").text rescue "N/A"
 			end
 
 			def description
-				base.find(:css, "div[class='approved-course-text']").text rescue "N/A"
+				ret = ""
+				base.all(:css, "div[class='approved-course-text']").each{|des| ret << des.text + "\n\n"}
+				if ret == ""
+					ret = "N/A"
+				end
+				ret
 			end
 			
 			def scrape
