@@ -8,8 +8,10 @@ module UMD
 
 			def self.scrape(link="http://registrar.umd.edu/")
 				session = Capybara::Session.new :poltergeist
+				puts "Visiting #{link}"
 				session.visit link
 				schedule_of_classes = session.find(:xpath, "//a[text()='Schedule of Classes']")[:href]
+				puts "Visiting schedule of classes #{schedule_of_classes}"
 				session.visit schedule_of_classes
 				page = ScheduleOfClasses.new session
 				return page.scrape
@@ -39,7 +41,7 @@ module UMD
 
 			def scrape
 				ret = []
-				puts departments
+				#puts departments
 				departments.each do |url|
 					puts url
 					session.visit url
