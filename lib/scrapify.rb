@@ -4,26 +4,21 @@ load File.absolute_path(File.join(__FILE__, "..", "..", "config", "environment.r
 require 'classy_testudo_brains'
 
 
-results = UMD::Waitlist::Scraper.scrape
+results = Classy::Testudo::Scraper.scrape
 puts "\n\n**** RESULTS ****\n"
 puts JSON.pretty_generate(results)
 
+include Classy::Testudo
 results.each do |department|
 	department[:courses].each do |course|
 
-		arr = Course.where(:course_id => course[:id])
-		c = arr.first
-=begin ## TODO
-		if arr.count > 1
-			c = arr.pop
-			arr.each do |o|
-				if o.last_update <=> c.last_update >= 0
-					c.destroy
-					c = o
-				end
-			end
+
+		arr = Models::Course.where(:course_id => course[:id]).sort(:last_update.desc).all
+
+		unless arr.empty?
+			c = arr.delete_at(0)
+			arr.collect{|crs| crs.destroy}
 		end
-=end
 
 		if c	
 			c.course_id   =  course[:id]
@@ -33,7 +28,7 @@ results.each do |department|
 			c.sections    =  course[:sections]
 			c.last_update =  Time.now
 		else
-			c = Course.new(
+			c = Models::Course.new(
 				course_id:     course[:id],
 				title:         course[:title],
 				credits:       course[:credits],
@@ -46,5 +41,3 @@ results.each do |department|
 		c.save!
 	end
 end
-
-#TODO: call class that will process the results and add to database

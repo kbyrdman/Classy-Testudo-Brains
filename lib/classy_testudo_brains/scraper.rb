@@ -1,8 +1,8 @@
 require 'classy_testudo_brains/core'
 require 'holdon'
 
-module UMD
-	module Waitlist
+module Classy
+	module Testudo
 
 		class Scraper
 

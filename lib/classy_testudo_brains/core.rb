@@ -3,8 +3,8 @@ require 'nokogiri'
 require 'open-uri'
 
 
-module UMD
-	module Waitlist
+module Classy
+	module Testudo
 		class Core
 
 			attr_accessor :base
