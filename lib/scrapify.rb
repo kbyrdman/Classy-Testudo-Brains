@@ -3,8 +3,11 @@ load File.absolute_path(File.join(__FILE__, "..", "..", "config", "environment.r
 
 require 'classy_testudo_brains'
 
-
-results = Classy::Testudo::Scraper.scrape
+if ARGV.any?
+	max = ARGV[0].to_i
+end
+	
+results = Classy::Testudo::Scraper.scrape(max)
 puts "\n\n**** RESULTS ****\n"
 puts JSON.pretty_generate(results)
 
