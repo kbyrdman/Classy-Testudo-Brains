@@ -6,7 +6,9 @@ module Classy
 
 		class Scraper
 
-			def self.scrape(link="http://registrar.umd.edu/")
+			def self.scrape(options={})
+				max = options.fetch(:max, nil)
+				link = options.fetch(:link, "http://registrar.umd.edu/")
 				session = Capybara::Session.new :poltergeist
 				puts "Visiting #{link}"
 				session.visit link
@@ -14,7 +16,7 @@ module Classy
 				puts "Visiting schedule of classes #{schedule_of_classes}"
 				session.visit schedule_of_classes
 				page = ScheduleOfClasses.new session
-				return page.scrape
+				return page.scrape(max)
 			end
 		end
 
@@ -39,14 +41,16 @@ module Classy
 			end
 
 
-			def scrape
+			def scrape(max=nil)
 				ret = []
-				#puts departments
-				departments.each do |url|
-					puts url
+				max ||= departments.count
+				puts "scraping #{max} departments"
+				departments.each_with_index do |url, i|
+					puts "scraping #{url}"
 					session.visit url
 					page = Department.new(session)
 					ret << page.scrape
+					break if (i+1) == max
 				end
 				ret	
 			end
