@@ -14,25 +14,71 @@ module Classy
 				JSON.pretty_generate(data)
 			end
 
-			get '/courses' do
-        		content_type :json
+			get '/courses/all' do
+    		content_type :json
 
-        		return pretty_json(all_courses)
-      		end
+    		return pretty_json(all_courses)
+  		end
 
-      		get '/courses/find?:courses' do
-        		content_type :json
+      # example payload: [course_id1, course_id2, course_id3]
+  		post '/courses/find' do
+    		content_type :json
 
-        		ids = params[:courses].split("&").map{|str| str.sub("id=", "")}
+        begin 
+          ids = JSON.parse(request.body.read)
+        rescue Exception => ex
+          return "Bad Request! -- Not Valid JSON: #{ex.message}"
+        end
 
-        		return pretty_json(find_courses(ids))
-      		end
+    		return pretty_json(find_courses(ids))
+  		end
 
-      		get '/courses/names' do
-        		content_type :json
+      get '/courses/find/:id' do
+        content_type :json
 
-        		return pretty_json(all_names)
-      		end
+        id = params[:id].split("=")[1]
+        return pretty_json(find_course(id))
+      end
+
+  		get '/courses/names' do
+    		content_type :json
+
+    		return pretty_json(all_full_names)
+  		end
+
+      get '/courses/ids' do
+        content_type :json
+
+        return pretty_json(all_ids)
+      end
+
+
+      get '/sections/all' do
+        content_type :json
+
+        return pretty_json(all_sections)
+      end
+
+      get '/sections/find/:id' do
+        content_type :json
+
+        id = params[:id].split("=")[1]
+        return pretty_json(find_section(id))
+      end
+
+
+      # example payload: [course_id1, course_id2, course_id3]
+      post '/sections/find' do
+        content_type :json
+
+        begin 
+          ids = JSON.parse(request.body.read)
+        rescue Exception => ex
+          return "Bad Request! -- Not Valid JSON: #{ex.message}"
+        end
+
+        return pretty_json(find_sections(ids))
+      end
 
 		end	
 	end
