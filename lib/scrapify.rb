@@ -3,13 +3,32 @@ load File.absolute_path(File.join(__FILE__, "..", "..", "config", "environment.r
 
 require 'classy_testudo_brains'
 
-if ARGV.any?
-	max = ARGV[0].to_i
+options = {}
+if ARGV.any? and (ARGV.count % 2 == 0)
+	if ARGV.include? "-M"
+		max = ARGV[ARGV.index("-M") + 1].to_i
+		options[:max] = max
+	elsif ARGV.include? "-t"
+		timeout = ARGV[ARGV.index("-t") + 1].to_i
+		puts "setting timeout to #{timeout} minutes"
+		options[:timeout] = timeout
+	elsif ARGV.include? "-L"
+		link = ARGV[ARGV.index("-L") + 1]
+		options[:link] = link
+	end
+elsif ARGV.count == 0
+	# do nothing, just run
+else
+	$stderr.puts "Usage: #{$0} -M [Max] -L [Link] -t [timeout]"
+	exit 1 
 end
+
+bot = Classy::Testudo::ScraperBot.create(options)
+results = bot.scrape
 	
-results = Classy::Testudo::Scraper.scrape(max)
-puts "\n\n**** RESULTS ****\n"
-puts JSON.pretty_generate(results)
+#puts "\n\n**** RESULTS ****\n"
+#puts JSON.pretty_generate(results)
+puts "#{results.count} classes found"
 
 include Classy::Testudo
 results.each do |department|
@@ -41,6 +60,7 @@ results.each do |department|
 			)
 		end
 
+		puts "saving course #{c.course_id}"
 		c.save!
 	end
 end

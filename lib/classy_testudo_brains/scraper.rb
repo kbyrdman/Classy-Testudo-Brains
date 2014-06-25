@@ -4,19 +4,66 @@ require 'holdon'
 module Classy
 	module Testudo
 
-		class Scraper
+		## This will be in charge of initializing and running ScraperBots
+		#  until the queue is empty, even when errors occur
+		class ScraperBot
+ 
+			attr_accessor :queue, :results, :session
+			attr_reader :timeout
+			
+			def initialize(options={})
+				@timeout = options.fetch(:timeout, 60)
+				@queue = options.fetch(:queue, [])
+				@results = []
+				@session = options.fetch(:session, Capybara::Session.new(:poltergeist))
+			end
 
-			def self.scrape(options={})
-				max = options.fetch(:max, nil)
-				link = options.fetch(:link, "http://registrar.umd.edu/")
+			def self.create(options={})
+				link = options.fetch(:link, "http://registrar.umd.edu/") 
 				session = Capybara::Session.new :poltergeist
 				puts "Visiting #{link}"
 				session.visit link
 				schedule_of_classes = session.find(:xpath, "//a[text()='Schedule of Classes']")[:href]
 				puts "Visiting schedule of classes #{schedule_of_classes}"
 				session.visit schedule_of_classes
+				
 				page = ScheduleOfClasses.new session
-				return page.scrape(max)
+				q = page.departments
+
+				max = options.fetch(:max, q.count)
+				q.slice!(max...q.count)
+
+				options.merge!({queue: q, session: session})
+				return self.new(options)
+			end
+
+
+			def scrape
+
+				start = Time.now
+				while !queue.empty?
+					unless (Time.now - start) <= timeout.minutes
+						puts "Scrape took longer that #{timeout} minutes"
+						break
+					end
+
+					begin
+						department = queue[0]
+						session.visit department
+						department_page = Department.new(session)
+						results << department_page.scrape
+						queue.delete_at(0)
+
+					rescue SystemExit, Interrupt
+						return results
+
+					rescue Exception => ex
+						puts "Caught Exception!  ~>  #{ex.message}"
+						puts "Continuing scrape: queue - #{@queue}"
+						session = Capybara::Session.new :poltergeist
+					end
+				end
+				return results
 			end
 		end
 
@@ -40,35 +87,21 @@ module Classy
 				right_list.all(:xpath, "./div").map{|div| session.current_url + div.find(:xpath, "./a")[:href]}
 			end
 
-
-			def scrape(max=nil)
-				ret = []
-				max ||= departments.count
-				puts "scraping #{max} departments"
-				departments.each_with_index do |url, i|
-					puts "scraping #{url}"
-					session.visit url
-					page = Department.new(session)
-					ret << page.scrape
-					break if (i+1) == max
-				end
-				ret	
-			end
 		end
 
 
 		class Department < Core
 
 			def courses
-				session.find(:xpath, "//div[@class='courses-container']").all(:xpath, "./div")
+				session.find(:xpath, "//div[@class='courses-container']").all(:xpath, "./div") rescue "N/A"
 			end
 
 			def abrv
-				session.find(:xpath, "//div[@class='course-prefix-info']").find(:xpath, ".//span[@class='course-prefix-abbr']").text
+				session.find(:xpath, "//div[@class='course-prefix-info']").find(:xpath, ".//span[@class='course-prefix-abbr']").text rescue "N/A"
 			end
 
 			def name
-				session.find(:xpath, "//span[@class='course-prefix-name']").text
+				session.find(:xpath, "//span[@class='course-prefix-name']").text rescue "N/A"
 			end
 
 			def scrape
@@ -86,7 +119,8 @@ module Classy
 			def initialize(base)
 				if base.first(:css, "a[class='toggle-sections-link']")
 					base.first(:css, "a[class='toggle-sections-link']").click
-					HoldOn.until(timeout: 10) do 
+					## TODO: Make this better
+					HoldOn.until(timeout: 25) do 
 						if base.first(:css, "div[class='sections-container']")
 							if !base.first(:css, "div[class='sections-container']")[:style].include?("display: none;") 
 								true

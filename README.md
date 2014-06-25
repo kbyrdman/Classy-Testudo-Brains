@@ -24,3 +24,9 @@ Sinatra app for scraping UMD waitlists
 	> dep = UMD::Waitlist::Department.new session
 	
 	> dep.scrape
+
+
+	Starting Thin server
+__________________________
+
+thin -R config.ru -p 3000 start
