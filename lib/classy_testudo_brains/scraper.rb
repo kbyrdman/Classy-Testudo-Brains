@@ -8,32 +8,28 @@ module Classy
 		#  until the queue is empty, even when errors occur
 		class ScraperBot
  
-			attr_accessor :queue, :results, :session
+			attr_accessor :queue, :results, :root
 			attr_reader :timeout
 			
 			def initialize(options={})
 				@timeout = options.fetch(:timeout, 60)
 				@queue = options.fetch(:queue, [])
 				@results = []
-				@session = options.fetch(:session, Capybara::Session.new(:poltergeist))
+				@root = options.fetch(:root)
 			end
 
 			def self.create(options={})
-				link = options.fetch(:link, "http://registrar.umd.edu/") 
-				session = Capybara::Session.new :poltergeist
-				puts "Visiting #{link}"
-				session.visit link
-				schedule_of_classes = session.find(:xpath, "//a[text()='Schedule of Classes']")[:href]
-				puts "Visiting schedule of classes #{schedule_of_classes}"
-				session.visit schedule_of_classes
+				link = options.fetch(:link, "https://ntst.umd.edu/soc/") 
+
+				root = Nokogiri::HTML(%x{curl "#{link}"})
 				
-				page = ScheduleOfClasses.new session
-				q = page.departments
+				soc = ScheduleOfClasses.new root
+				q = soc.departments
 
 				max = options.fetch(:max, q.count)
 				q.slice!(max...q.count)
 
-				options.merge!({queue: q, session: session})
+				options.merge!({queue: q, root: root})
 				return self.new(options)
 			end
 
@@ -68,32 +64,38 @@ module Classy
 		end
 
 
-		class ScheduleOfClasses < Core
+		class ScheduleOfClasses < DOM
+
+			attr_reader :domain
+			def initialize(root, domain)
+				@domain = domain
+				super(root)
+			end
 
 			def department_lists
-				session.find(:xpath, "//div[@id='course-prefixes-page']")
+				root.xpath("//div[@id='course-prefixes-page']")
 			end
 
 			def left_list
-				department_lists.find(:xpath, "div[@id='left-course-prefix-column']")
+				department_lists.xpath("div[@id='left-course-prefix-column']")
 			end
 
 			def right_list
-				department_lists.find(:xpath, "div[@id='right-course-prefix-column']")
+				department_lists.xpath("div[@id='right-course-prefix-column']")
 			end
 
 			def departments
-				left_list.all(:xpath, "./div").map{|div| session.current_url + div.find(:xpath, "./a")[:href]} +
-				right_list.all(:xpath, "./div").map{|div| session.current_url + div.find(:xpath, "./a")[:href]}
+				left_list.xpath("./div").map{|div| domain + div.xpath("./a").attribute("href").text} +
+				right_list.xpath("./div").map{|div| domain + div.xpath("./a").attribute("href").text}
 			end
 
 		end
 
 
-		class Department < Core
+		class Department < DOM
 
 			def courses
-				session.find(:xpath, "//div[@class='courses-container']").all(:xpath, "./div") rescue "N/A"
+				session.find(:xpath, "//div[@class='courses-container']").all(:xpath, "./div") rescue []
 			end
 
 			def abrv
@@ -108,16 +110,24 @@ module Classy
 				{ 
 					department_abrv: abrv,
 					department_name: name,
-					courses: courses.map{|course| puts "scraping #{course[:id]}"; c = Course.new(course); c.scrape} 
+					courses: courses.map{|course| puts "scraping #{course[:id]}"; c = Course.new(course); c.scrape}
 				}
 			end
 		end	
 
 
-		class Course < Core
+		class Course < DOM
 
 			def initialize(base)
-				if base.first(:css, "a[class='toggle-sections-link']")
+				domain = "https://ntst.umd.edu"
+				course_link = domain + base.first(:css, "a[class='toggle-sections-link']")[:href]
+				course_id = base[:id]
+				puts "visiting #{course_link}"
+
+				root = Nokogiri::XML(%x{curl "#{course_link}"})
+				super(root.xpath("//div[@id='#{course_id}']"))
+=begin
+				if 
 					base.first(:css, "a[class='toggle-sections-link']").click
 					## TODO: Make this better
 					HoldOn.until(timeout: 25) do 
@@ -133,27 +143,28 @@ module Classy
 					end
 				end
 				super(base)
+=end
 			end
 			
 			def sections
-				base.all(:css, "div[class='section']") 
+				root.xpath("div[class='section']") 
 			end
 
 			def course_id
-				base.first(:css, "div[class='course-id']").text rescue "N/A"
+				root.first(:css, "div[class='course-id']").text rescue "N/A"
 			end
 
 			def course_title
-				base.first(:css, "span[class='course-title']").text rescue "N/A"
+				root.first(:css, "span[class='course-title']").text rescue "N/A"
 			end
 
 			def course_credits
-				base.first(:css, "span[class='course-min-credits']").text rescue "N/A"
+				root.first(:css, "span[class='course-min-credits']").text rescue "N/A"
 			end
 
 			def description
 				ret = ""
-				base.all(:css, "div[class='approved-course-text']").each{|des| ret << des.text + "\n\n"}
+				root.all(:css, "div[class='approved-course-text']").each{|des| ret << des.text + "\n\n"}
 				if ret == ""
 					ret = "N/A"
 				end
@@ -170,48 +181,48 @@ module Classy
 				}
 			end
 
-			class Section < Core
+			class Section < DOM
 
 				def section_number
-					base.find(:css, "span[class='section-id']").text rescue "N/A"
+					root.find(:css, "span[class='section-id']").text rescue "N/A"
 				end
 
 				def seats
 					total = open = waitlist = "N/A"
-					if base.first(:css, "span[class='total-seats-count']")
-						total = base.first(:css, "span[class='total-seats-count']").text
+					if root.first(:css, "span[class='total-seats-count']")
+						total = root.first(:css, "span[class='total-seats-count']").text
 					end
-					if base.first(:css, "span[class='open-seats-count']")
-						open = base.first(:css, "span[class='open-seats-count']").text
+					if root.first(:css, "span[class='open-seats-count']")
+						open = root.first(:css, "span[class='open-seats-count']").text
 					end
-					if base.first(:css, "span[class='waitlist-count']")
-						waitlist = base.first(:css, "span[class='waitlist-count']").text
+					if root.first(:css, "span[class='waitlist-count']")
+						waitlist = root.first(:css, "span[class='waitlist-count']").text
 					end
 					return { total: total, open: open, waitlist: waitlist }
 				end
 
 				def class_days
-					base.find(:css, "span[class='section-days']").text rescue "N/A" 
+					root.find(:css, "span[class='section-days']").text rescue "N/A" 
 				end
 
 				def start_time
-					base.find(:css, "span[class='class-start-time']").text rescue "N/A"
+					root.find(:css, "span[class='class-start-time']").text rescue "N/A"
 				end
 
 				def end_time
-					base.find(:css, "span[class='class-end-time']").text rescue "N/A"
+					root.find(:css, "span[class='class-end-time']").text rescue "N/A"
 				end
 
 				def instructor
-					base.find(:css, "span[class='section-instructor']").text rescue "N/A"
+					root.find(:css, "span[class='section-instructor']").text rescue "N/A"
 				end
 
 				def room_number
-					base.find(:css, "span[class='class-room']").text rescue "N/A"
+					root.find(:css, "span[class='class-room']").text rescue "N/A"
 				end
 
 				def building
-					base.find(:css, "span[class='building-code']").text rescue "N/A"
+					root.find(:css, "span[class='building-code']").text rescue "N/A"
 				end
 
 				def scrape
