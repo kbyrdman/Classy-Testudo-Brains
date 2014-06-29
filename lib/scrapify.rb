@@ -23,9 +23,10 @@ else
 	exit 1 
 end
 
+include Classy::Testudo
 
 puts "starting: #{Time.now} \n\n"
-bot = Classy::Testudo::ScraperBot.create(options)
+bot = ScraperBot.create(options)
 results = bot.scrape
 puts "ending: #{Time.now} \n\n"
 
@@ -33,7 +34,6 @@ count = 0
 results.collect{|dep| count = count + dep[:courses].count}
 puts "#{count} classes found"
 
-include Classy::Testudo
 results.each do |department|
 	department[:courses].each do |course|
 
