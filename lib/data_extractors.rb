@@ -9,6 +9,10 @@ module Classy
 				Models::Course.all.map{|c| JSON.parse(c.to_json)}
 			end
 
+			def find_range(from, to)
+				Models::Course.where(:course_id.gte => from.upcase, :course_id.lte => to.upcase).all.map{|c| JSON.parse(c.to_json)}
+			end
+
 			## Finds a course with the given course id
 			def find_course(course_id)
 				arr = Models::Course.where(:course_id => course_id).sort(:last_update.desc).all
