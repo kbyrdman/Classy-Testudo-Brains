@@ -23,12 +23,15 @@ else
 	exit 1 
 end
 
+
+puts "starting: #{Time.now} \n\n"
 bot = Classy::Testudo::ScraperBot.create(options)
 results = bot.scrape
-	
-#puts "\n\n**** RESULTS ****\n"
-#puts JSON.pretty_generate(results)
-puts "#{results.count} classes found"
+puts "ending: #{Time.now} \n\n"
+
+count = 0
+results.collect{|dep| count = count + dep[:courses].count}
+puts "#{count} classes found"
 
 include Classy::Testudo
 results.each do |department|
@@ -61,6 +64,14 @@ results.each do |department|
 		end
 
 		puts "saving course #{c.course_id}"
-		c.save!
+
+		begin
+			c.save!
+		rescue Exception => ex
+			puts "\n\n\nSomething happened while saving!"
+			puts ex.message
+			ex.backtrace.each{|s| puts s}
+			puts "\n\n\n"
+		end
 	end
 end
