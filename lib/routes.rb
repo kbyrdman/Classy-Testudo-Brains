@@ -33,6 +33,16 @@ module Classy
     		return pretty_json(find_courses(ids))
   		end
 
+      get '/courses/find/:range' do
+        content_type :json
+
+        range = params[:range].gsub("range=", "")
+        from = range.split("-")[0]
+        to = range.split("-")[1]
+
+        return pretty_json(find_range(from, to))
+      end
+
       get '/courses/find/:id' do
         content_type :json
 
