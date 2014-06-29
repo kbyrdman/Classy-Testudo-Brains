@@ -35,6 +35,13 @@ module Classy
 			def request(url)
 				return Nokogiri::XML(%x{curl "#{url}"})
 			end
+
+			def sub(text)
+				text.gsub!(/\r/, "")
+				text.gsub!(/\t/, "")
+				text.gsub!(/\n/, "")
+				return text
+			end
 		end
 	end
 end
