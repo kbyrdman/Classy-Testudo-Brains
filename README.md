@@ -8,7 +8,8 @@ Sinatra app for scraping UMD waitlists
 ---------------
 
  - For entire scrape
-	> UMD::Waitlist::Scraper.scrape  
+ 	> options = {}
+	> Classy::Testudo::ScraperBot.scrape(options)  
 
 
  - scraping one department
