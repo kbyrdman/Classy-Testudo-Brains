@@ -8,28 +8,27 @@ module Classy
 		#  until the queue is empty, even when errors occur
 		class ScraperBot
  
-			attr_accessor :queue, :results, :root
+			attr_accessor :queue, :results
 			attr_reader :timeout
 			
 			def initialize(options={})
 				@timeout = options.fetch(:timeout, 60)
 				@queue = options.fetch(:queue, [])
 				@results = []
-				@root = options.fetch(:root)
 			end
 
 			def self.create(options={})
 				link = options.fetch(:link, "https://ntst.umd.edu/soc/") 
 
-				root = Nokogiri::HTML(%x{curl "#{link}"})
+				root = Nokogiri::HTML(%x{curl -s "#{link}"})
 				
-				soc = ScheduleOfClasses.new root
+				soc = ScheduleOfClasses.new root, link
 				q = soc.departments
 
 				max = options.fetch(:max, q.count)
 				q.slice!(max...q.count)
 
-				options.merge!({queue: q, root: root})
+				options.merge!({queue: q})
 				return self.new(options)
 			end
 
@@ -40,13 +39,13 @@ module Classy
 				while !queue.empty?
 					unless (Time.now - start) <= timeout.minutes
 						puts "Scrape took longer that #{timeout} minutes"
-						break
+						return results
 					end
 
 					begin
 						department = queue[0]
-						session.visit department
-						department_page = Department.new(session)
+						root = Nokogiri::HTML(%x{curl -s "#{department}"})
+						department_page = Department.new(root)
 						results << department_page.scrape
 						queue.delete_at(0)
 
@@ -55,8 +54,13 @@ module Classy
 
 					rescue Exception => ex
 						puts "Caught Exception!  ~>  #{ex.message}"
-						puts "Continuing scrape: queue - #{@queue}"
-						session = Capybara::Session.new :poltergeist
+						ex.backtrace.each{|s| puts s}
+
+						if ex.message.include? "abort then interrupt!"
+							return results
+						else
+							puts "Continuing scrape: queue - #{@queue}"
+						end
 					end
 				end
 				return results
@@ -73,7 +77,7 @@ module Classy
 			end
 
 			def department_lists
-				root.xpath("//div[@id='course-prefixes-page']")
+				root.xpath(".//div[@id='course-prefixes-page']")
 			end
 
 			def left_list
@@ -95,21 +99,21 @@ module Classy
 		class Department < DOM
 
 			def courses
-				session.find(:xpath, "//div[@class='courses-container']").all(:xpath, "./div") rescue []
+				root.xpath(".//div[@class='courses-container']").xpath("./div") rescue []
 			end
 
 			def abrv
-				session.find(:xpath, "//div[@class='course-prefix-info']").find(:xpath, ".//span[@class='course-prefix-abbr']").text rescue "N/A"
+				root.xpath(".//div[@class='course-prefix-info']").xpath(".//span[@class='course-prefix-abbr']").text rescue "N/A"
 			end
 
 			def name
-				session.find(:xpath, "//span[@class='course-prefix-name']").text rescue "N/A"
+				root.xpath(".//span[@class='course-prefix-name']").text rescue "N/A"
 			end
 
 			def scrape
 				{ 
-					department_abrv: abrv,
-					department_name: name,
+					department_abrv: sub(abrv),
+					department_name: sub(name),
 					courses: courses.map{|course| puts "scraping #{course[:id]}"; c = Course.new(course); c.scrape}
 				}
 			end
@@ -120,51 +124,40 @@ module Classy
 
 			def initialize(base)
 				domain = "https://ntst.umd.edu"
-				course_link = domain + base.first(:css, "a[class='toggle-sections-link']")[:href]
-				course_id = base[:id]
-				puts "visiting #{course_link}"
 
-				root = Nokogiri::XML(%x{curl "#{course_link}"})
-				super(root.xpath("//div[@id='#{course_id}']"))
-=begin
-				if 
-					base.first(:css, "a[class='toggle-sections-link']").click
-					## TODO: Make this better
-					HoldOn.until(timeout: 25) do 
-						if base.first(:css, "div[class='sections-container']")
-							if !base.first(:css, "div[class='sections-container']")[:style].include?("display: none;") 
-								true
-							else
-								false
-							end
-						else 
-							false
-						end
-					end
+				if !base.xpath(".//a[@class='toggle-sections-link']").empty?
+					course_link = domain + base.xpath(".//a[@class='toggle-sections-link']").attribute("href").text
+					course_id = base.attribute("id").text
+					puts "visiting #{course_link}"
+
+					dom = Nokogiri::HTML(%x{curl -s "#{course_link}"})
+					root = dom.xpath(".//div[@id='#{course_id}']").first
+				else
+					root = base
 				end
-				super(base)
-=end
+				
+				super(root)
 			end
 			
 			def sections
-				root.xpath("div[class='section']") 
+				root.xpath(".//div[@class='section']") 
 			end
 
 			def course_id
-				root.first(:css, "div[class='course-id']").text rescue "N/A"
+				root.xpath(".//div[@class='course-id']").text rescue "N/A"
 			end
 
 			def course_title
-				root.first(:css, "span[class='course-title']").text rescue "N/A"
+				root.xpath(".//span[@class='course-title']").text rescue "N/A"
 			end
 
 			def course_credits
-				root.first(:css, "span[class='course-min-credits']").text rescue "N/A"
+				root.xpath(".//span[@class='course-min-credits']").text rescue "N/A"
 			end
 
 			def description
 				ret = ""
-				root.all(:css, "div[class='approved-course-text']").each{|des| ret << des.text + "\n\n"}
+				root.xpath(".//div[@class='approved-course-text']").each{|des| ret << des.text + "\n\n"}
 				if ret == ""
 					ret = "N/A"
 				end
@@ -173,9 +166,9 @@ module Classy
 			
 			def scrape
 				{ 
-					id: course_id,
-					title: course_title,
-					credits: course_credits,
+					id: sub(course_id),
+					title: sub(course_title),
+					credits: sub(course_credits),
 					description: description,
 					sections: sections.map{|s| sec = Section.new(s); sec.scrape}
 				}
@@ -184,57 +177,57 @@ module Classy
 			class Section < DOM
 
 				def section_number
-					root.find(:css, "span[class='section-id']").text rescue "N/A"
+					root.xpath(".//span[@class='section-id']").text rescue "N/A"
 				end
 
 				def seats
 					total = open = waitlist = "N/A"
-					if root.first(:css, "span[class='total-seats-count']")
-						total = root.first(:css, "span[class='total-seats-count']").text
+					if root.xpath(".//span[@class='total-seats-count']")
+						total = root.xpath(".//span[@class='total-seats-count']").text
 					end
-					if root.first(:css, "span[class='open-seats-count']")
-						open = root.first(:css, "span[class='open-seats-count']").text
+					if root.xpath(".//span[@class='open-seats-count']")
+						open = root.xpath(".//span[@class='open-seats-count']").text
 					end
-					if root.first(:css, "span[class='waitlist-count']")
-						waitlist = root.first(:css, "span[class='waitlist-count']").text
+					if root.xpath(".//span[@class='waitlist-count']")
+						waitlist = root.xpath(".//span[@class='waitlist-count']").text
 					end
-					return { total: total, open: open, waitlist: waitlist }
+					return { total: sub(total), open: sub(open), waitlist: sub(waitlist) }
 				end
 
 				def class_days
-					root.find(:css, "span[class='section-days']").text rescue "N/A" 
+					root.xpath(".//span[@class='section-days']").text rescue "N/A" 
 				end
 
 				def start_time
-					root.find(:css, "span[class='class-start-time']").text rescue "N/A"
+					root.xpath(".//span[@class='class-start-time']").text rescue "N/A"
 				end
 
 				def end_time
-					root.find(:css, "span[class='class-end-time']").text rescue "N/A"
+					root.xpath(".//span[@class='class-end-time']").text rescue "N/A"
 				end
 
 				def instructor
-					root.find(:css, "span[class='section-instructor']").text rescue "N/A"
+					root.xpath(".//span[@class='section-instructor']").text rescue "N/A"
 				end
 
 				def room_number
-					root.find(:css, "span[class='class-room']").text rescue "N/A"
+					root.xpath(".//span[@class='class-room']").text rescue "N/A"
 				end
 
 				def building
-					root.find(:css, "span[class='building-code']").text rescue "N/A"
+					root.xpath(".//span[@class='building-code']").text rescue "N/A"
 				end
 
 				def scrape
 					{
-						number: section_number,
+						number: sub(section_number),
 						seats: seats,
-						days: class_days,
-						start_time: start_time,
-						end_time: end_time,
-						instructor: instructor,
-						room_number: room_number,
-						building: building
+						days: sub(class_days),
+						start_time: sub(start_time),
+						end_time: sub(end_time),
+						instructor: sub(instructor),
+						room_number: sub(room_number),
+						building: sub(building)
 					}
 				end
 			end
