@@ -33,7 +33,7 @@ module Classy
     		return pretty_json(find_courses(ids))
   		end
 
-      get '/courses/find/:range' do
+      get '/courses/range/:range' do
         content_type :json
 
         range = params[:range].gsub("range=", "")
